@@ -1,0 +1,71 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: app-prod
+
+resources:
+  - ../../base
+
+# Opt-in ServiceMonitor via a reusable component (prod has Prometheus).
+components:
+  - ../../components/monitoring
+
+replicas:
+  - name: app
+    count: 3
+
+# Images transformer — the ONLY place image versions appear.
+# CI bumps this line: `kustomize edit set image app=...@sha256:...`
+images:
+  - name: app
+    newName: registry.example.com/team/app
+    digest: sha256:6ba3a5f5f9b5a1c22e6b5ce3345bcb37a3c67091c14a5bd80e1f8f57d9f24d68
+
+configMapGenerator:
+  - name: app-config
+    literals:
+      - LOG_LEVEL=info
+      - FEATURE_FLAGS=stable
+      - CACHE_TTL_SECONDS=300
+
+patches:
+  # Strategic-merge: production resource sizing (Guaranteed-ish memory).
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: app
+      spec:
+        template:
+          spec:
+            containers:
+              - name: app
+                resources:
+                  requests:
+                    cpu: 500m
+                    memory: 512Mi
+                  limits:
+                    memory: 512Mi
+
+  # JSON6902: surgical list/field ops where merge semantics don't cut it —
+  # add a topology spread constraint and a prod-only annotation with '/' in
+  # its key (slashes make strategic merge awkward, trivial in 6902).
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: app
+    patch: |-
+      - op: add
+        path: /spec/template/spec/topologySpreadConstraints
+        value:
+          - maxSkew: 1
+            topologyKey: topology.kubernetes.io/zone
+            whenUnsatisfiable: ScheduleAnyway
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: app
+      - op: add
+        path: /spec/template/metadata/annotations
+        value:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"

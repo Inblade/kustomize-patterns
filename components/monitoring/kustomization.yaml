@@ -1,0 +1,12 @@
+# A Component: reusable, opt-in slice of configuration.
+# Unlike a base, a component is applied ON TOP of the overlay that includes it,
+# so it can generate/patch resources the overlay already has.
+#
+# Include from any overlay with:
+#   components:
+#     - ../../components/monitoring
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - servicemonitor.yaml

@@ -1,0 +1,9 @@
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Rendered output
+build/
+*.rendered.yaml

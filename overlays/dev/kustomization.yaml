@@ -1,0 +1,47 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: app-dev
+nameSuffix: -dev
+
+resources:
+  - ../../base
+
+# Simple field overrides: the `replicas` shortcut beats writing a patch.
+replicas:
+  - name: app
+    count: 1
+
+# Dev pins a moving tag on purpose — prod pins digests (see overlays/prod).
+images:
+  - name: app
+    newName: registry.example.com/team/app
+    newTag: dev
+
+# Generated ConfigMap: content change -> new hashed name -> automatic rollout.
+configMapGenerator:
+  - name: app-config
+    literals:
+      - LOG_LEVEL=debug
+      - FEATURE_FLAGS=all
+      - CACHE_TTL_SECONDS=5
+
+# Inline strategic-merge patch: dev runs without CPU limits to keep
+# hot-reload snappy on a shared cluster.
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: app
+      spec:
+        template:
+          spec:
+            containers:
+              - name: app
+                resources:
+                  requests:
+                    cpu: 50m
+                    memory: 64Mi
+                  limits:
+                    memory: 128Mi
